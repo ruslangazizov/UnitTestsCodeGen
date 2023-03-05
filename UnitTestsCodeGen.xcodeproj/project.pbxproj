@@ -106,6 +106,9 @@
 				Base,
 			);
 			mainGroup = 44451AB629B52A4F00B53A8D;
+			packageReferences = (
+				44451ACB29B5316200B53A8D /* XCRemoteSwiftPackageReference "Sourcery" */,
+			);
 			productRefGroup = 44451AC029B52A4F00B53A8D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -272,7 +275,7 @@
 				44451AC529B52A4F00B53A8D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		44451AC629B52A4F00B53A8D /* Build configuration list for PBXNativeTarget "UnitTestsCodeGen" */ = {
 			isa = XCConfigurationList;
@@ -281,9 +284,20 @@
 				44451AC829B52A4F00B53A8D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		44451ACB29B5316200B53A8D /* XCRemoteSwiftPackageReference "Sourcery" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzysztofzablocki/Sourcery";
+			requirement = {
+				kind = exactVersion;
+				version = 2.0.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = 44451AB729B52A4F00B53A8D /* Project object */;
 }
