@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SourceKittenFramework
 
 struct SyntaxStructure: Codable {
 
@@ -25,8 +24,9 @@ struct SyntaxStructure: Codable {
     let nameoffset: Int?
     let offset: Int?
     let runtimename: String?
-    let substructure: [SyntaxStructure]?
+    let substructures: [SyntaxStructure]?
     let typename: String?
+    let setteraccessibility: String?
 
     enum CodingKeys: String, CodingKey {
         case accessibility = "key.accessibility"
@@ -44,41 +44,8 @@ struct SyntaxStructure: Codable {
         case nameoffset = "key.nameoffset"
         case offset = "key.offset"
         case runtimename = "key.runtime_name"
-        case substructure = "key.substructure"
+        case substructures = "key.substructure"
         case typename = "key.typename"
-    }
-}
-
-extension SyntaxStructure {
-
-    static func from(_ file: File) -> SyntaxStructure? {
-        do {
-            let structure = try Structure(file: file)
-            guard let jsonData = structure.description.data(using: .utf8) else { return nil }
-            return try JSONDecoder().decode(SyntaxStructure.self, from: jsonData)
-        } catch {
-            print(error)
-            return nil
-        }
-    }
-
-    func getClassOrStruct() -> SyntaxStructure? {
-        if self.isClassOrStruct() {
-            return self
-        }
-        for subStructure in self.substructure ?? [] {
-            if let targetStructure = subStructure.getClassOrStruct() {
-                return targetStructure
-            }
-        }
-        return nil
-    }
-}
-
-private extension SyntaxStructure {
-
-    func isClassOrStruct() -> Bool {
-        kind == "source.lang.swift.decl.class" ||
-        kind == "source.lang.swift.decl.struct"
+        case setteraccessibility = "key.setter_accessibility"
     }
 }

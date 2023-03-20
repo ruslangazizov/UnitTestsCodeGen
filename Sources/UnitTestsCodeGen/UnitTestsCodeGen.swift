@@ -9,6 +9,8 @@ import Foundation
 import ArgumentParser
 import SourceKittenFramework
 
+// MARK: - Abstracts
+
 private extension String {
     static let typeNameAbstract = "Name of a class or struct to test"
     static let fileNameAbstract = "Name of a file to be generated (without .swift extension)"
@@ -28,17 +30,28 @@ struct UnitTestsCodeGen: ParsableCommand {
 
     mutating func run() throws {
         print("You entered: typeName = \(typeName), fileName = \(String(describing: fileName))")
-        if let (path, structure) = findFile(by: typeName) {
-            let names = structure.inheritedTypes?.compactMap { $0.name } ?? []
-            print("Found \(typeName) at file \(path) inherited from \(names)")
-        } else {
+        guard let (path, fileStructure, targetStructure) = findFile(by: typeName) else {
             print("Did not find \(typeName) anywhere :(")
+            return
+        }
+
+        let names = fileStructure.getInheritedTypes(for: typeName)
+        print("Found \(typeName) in file \(path) inherited from \(names)")
+
+        let params = targetStructure.getInitParams(at: path)
+        if !params.isEmpty {
+            print("Found init method with params: \(params)")
+        } else {
+            print("Did not find init method and could not infer it :(")
+            return
         }
     }
 
     // MARK: - Private
 
-    private func findFile(by typeName: String) -> (path: String, structure: SyntaxStructure)? {
+    private func findFile(by typeName: String) -> (path: String,
+                                                   fileStructure: SyntaxStructure,
+                                                   targetStructure: SyntaxStructure)? {
         let manager = FileManager.default
         let directoryPath = manager.currentDirectoryPath
         let enumerator = manager.enumerator(atPath: directoryPath)
@@ -47,10 +60,9 @@ struct UnitTestsCodeGen: ParsableCommand {
             guard !element.hasPrefix("."),
                   element.hasSuffix(".swift"),
                   let file = File(path: filePath),
-                  let structure = SyntaxStructure.from(file),
-                  let targetStructure = structure.getClassOrStruct(),
-                  targetStructure.name == typeName else { continue }
-            return (filePath, targetStructure)
+                  let fileStructure = SyntaxStructure.from(file),
+                  let targetStructure = fileStructure.getClassOrStruct(with: typeName) else { continue }
+            return (filePath, fileStructure, targetStructure)
         }
         return nil
     }
