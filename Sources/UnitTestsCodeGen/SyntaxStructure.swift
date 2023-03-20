@@ -6,10 +6,9 @@
 //
 
 import Foundation
-import SourceKittenFramework
 
 struct SyntaxStructure: Codable {
-    
+
     let accessibility: String?
     let attribute: String?
     let attributes: [SyntaxStructure]?
@@ -25,9 +24,10 @@ struct SyntaxStructure: Codable {
     let nameoffset: Int?
     let offset: Int?
     let runtimename: String?
-    let substructure: [SyntaxStructure]?
+    let substructures: [SyntaxStructure]?
     let typename: String?
-    
+    let setteraccessibility: String?
+
     enum CodingKeys: String, CodingKey {
         case accessibility = "key.accessibility"
         case attribute = "key.attribute"
@@ -44,7 +44,8 @@ struct SyntaxStructure: Codable {
         case nameoffset = "key.nameoffset"
         case offset = "key.offset"
         case runtimename = "key.runtime_name"
-        case substructure = "key.substructure"
+        case substructures = "key.substructure"
         case typename = "key.typename"
+        case setteraccessibility = "key.setter_accessibility"
     }
 }
