@@ -23,7 +23,7 @@ final class Presenter: IPresenter {
 
     // MARK: - Init
 
-    internal init(viewModelsFactory: IViewModelsFactory) {
+    init(viewModelsFactory: IViewModelsFactory) {
         self.viewModelsFactory = viewModelsFactory
     }
 
