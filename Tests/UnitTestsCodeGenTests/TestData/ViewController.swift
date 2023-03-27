@@ -13,7 +13,7 @@ protocol IViewController {
 
 struct ViewController: CustomStringConvertible {
 
-    let presenter: IPresenter
+    let presenter: IPresenter?
 //    internal let secondLet      =     ""
 //    private let thirdLet: String = ""
 //

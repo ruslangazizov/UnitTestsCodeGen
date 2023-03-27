@@ -17,13 +17,14 @@ final class Presenter: IPresenter {
 
     // Dependencies
     private let viewModelsFactory: IViewModelsFactory
+    var view: IViewController?
 
     // Properties
     var dataSource: [String] = []
 
     // MARK: - Init
 
-    internal init(viewModelsFactory: IViewModelsFactory) {
+    init(viewModelsFactory: IViewModelsFactory) {
         self.viewModelsFactory = viewModelsFactory
     }
 

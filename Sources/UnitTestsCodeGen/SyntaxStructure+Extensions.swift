@@ -33,20 +33,24 @@ extension SyntaxStructure {
         return nil
     }
 
-    func getInheritedTypes(for typeName: String) -> [String] {
-        var inheritedTypes: [String] = []
+    func getClassesOrStructsOrExtensions(with name: String?) -> [SyntaxStructure] {
+        var subStructures: [SyntaxStructure] = []
         for subStructure in substructures ?? [] {
-            if subStructure.isClassOrStructOrExtension() && subStructure.name == typeName {
-                inheritedTypes += subStructure.inheritedTypes?.compactMap { $0.name } ?? []
+            if subStructure.isClassOrStructOrExtension() && subStructure.name == name {
+                subStructures.append(subStructure)
             }
         }
-        return inheritedTypes
+        return subStructures
     }
 
-    func getInitParams(at path: String) -> [String: String] {
+    func getInheritedTypes() -> [String] {
+        inheritedTypes?.compactMap { $0.name } ?? []
+    }
+
+    func getInitParams(in file: File) -> [String: String] {
         let params = parseInitMethod()
         if params.isEmpty && kind == "source.lang.swift.decl.struct" {
-            return parseStructSynthesizedInit(at: path)
+            return parseStructSynthesizedInit(in: file)
         }
         return params
     }
@@ -57,6 +61,19 @@ extension SyntaxStructure {
         } else {
             return false
         }
+    }
+
+    func isMockOrStub() -> Bool {
+        guard let name = name?.lowercased() else { return false }
+        return name.isMockOrStub()
+    }
+}
+
+extension String {
+
+    func isMockOrStub() -> Bool {
+        let name = lowercased()
+        return name.hasSuffix("mock") || name.hasSuffix("stub")
     }
 }
 
@@ -84,8 +101,8 @@ private extension SyntaxStructure {
         return params
     }
 
-    func parseStructSynthesizedInit(at path: String) -> [String: String] {
-        guard let contents = File(path: path)?.contents.utf8 else { return [:] }
+    func parseStructSynthesizedInit(in file: File) -> [String: String] {
+        let fileContents = file.contents.utf8
         var params: [String: String] = [:]
         for subStructure in substructures ?? [] {
             guard subStructure.kind == "source.lang.swift.decl.var.instance",
@@ -93,10 +110,11 @@ private extension SyntaxStructure {
                   !subStructure.attributesContainLazy(),
                   let offset = subStructure.offset,
                   let length = subStructure.length else { continue }
-            let start = contents.index(contents.startIndex, offsetBy: offset)
-            let end = contents.index(start, offsetBy: length)
-            if let propertyLine = String(contents[start..<end]),
+            let start = fileContents.index(fileContents.startIndex, offsetBy: offset)
+            let end = fileContents.index(start, offsetBy: length)
+            if let propertyLine = String(fileContents[start..<end]),
                !propertyLine.contains("="),
+               !(propertyLine.hasPrefix("var") && propertyLine.hasSuffix("?")),
                let name = subStructure.name,
                let typename = subStructure.typename {
                 params[name] = typename
