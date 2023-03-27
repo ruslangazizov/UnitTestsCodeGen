@@ -72,7 +72,8 @@ extension SyntaxStructure {
 extension String {
 
     func isMockOrStub() -> Bool {
-        hasSuffix("mock") || hasSuffix("stub")
+        let name = lowercased()
+        return name.hasSuffix("mock") || name.hasSuffix("stub")
     }
 }
 
@@ -113,6 +114,7 @@ private extension SyntaxStructure {
             let end = fileContents.index(start, offsetBy: length)
             if let propertyLine = String(fileContents[start..<end]),
                !propertyLine.contains("="),
+               !(propertyLine.hasPrefix("var") && propertyLine.hasSuffix("?")),
                let name = subStructure.name,
                let typename = subStructure.typename {
                 params[name] = typename

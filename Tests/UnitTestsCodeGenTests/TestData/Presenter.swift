@@ -17,6 +17,7 @@ final class Presenter: IPresenter {
 
     // Dependencies
     private let viewModelsFactory: IViewModelsFactory
+    var view: IViewController?
 
     // Properties
     var dataSource: [String] = []

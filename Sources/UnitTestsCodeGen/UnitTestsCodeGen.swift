@@ -15,153 +15,80 @@ private extension String {
     static let typeNameAbstract = "Name of a class or struct to test"
     static let fileNameAbstract = "Name of a file to be generated (without .swift extension)"
     static let configurationAbstract = "Generates unit test case class"
+    static let mocksFolderNameAbstract = "Name of folder for generated mocks"
+    static let importsAbstract = "Additional imports for generated mocks files separated with comma without spaces"
+    static let testableImportsAbstract = "Imports with @testable annotation for generated mocks files separated with comma without spaces"
+}
+
+struct CommandLineArguments {
+    let typeName: String
+    let fileName: String?
+    let mocksFolderName: String
+    let imports: [String]
+    let testableImports: [String]
 }
 
 struct UnitTestsCodeGen: ParsableCommand {
+
+    // Properties
+    private lazy var arguments = {
+        CommandLineArguments(typeName: typeName,
+                             fileName: fileName,
+                             mocksFolderName: mocksFolderName,
+                             imports: imports?.components(separatedBy: ",") ?? [],
+                             testableImports: testableImports?.components(separatedBy: ",") ?? [])
+    }()
+    private lazy var manager = FileManager.default
+    private lazy var persistenceManager = {
+        PersistenceManager(commandLineManager: CommandLineManager(),
+                           commandLineArguments: arguments)
+    }()
 
     // MARK: - Arguments and options
 
     @Argument(help: .init(.typeNameAbstract)) var typeName: String
     @Option(name: .shortAndLong, help: .init(.fileNameAbstract)) var fileName: String?
+    @Option(name: .shortAndLong, help: .init(.mocksFolderNameAbstract)) var mocksFolderName: String = "Generated"
+    @Option(name: .shortAndLong, help: .init(.importsAbstract)) var imports: String?
+    @Option(name: .shortAndLong, help: .init(.testableImportsAbstract)) var testableImports: String?
 
     // MARK: - ParsableCommand
 
     static let configuration = CommandConfiguration(abstract: .configurationAbstract, version: "0.1.0")
 
     mutating func run() throws {
-        print("You entered: typeName = \(typeName), fileName = \(String(describing: fileName))")
+        print("""
+        You entered: type name = \(typeName),
+                     file name = \(String(describing: fileName))
+                     folder name for generated mocks = \(mocksFolderName)
+        """)
         // filesSubStructures нужны, чтобы по ним пройтись и собрать все >=internal методы/свойства
-        guard let (targetFile, targetStructure, filesSubStructures) = findFile(by: typeName),
+        guard let (targetFile,
+                   targetStructure,
+                   filesSubStructures) = persistenceManager.findFile(by: typeName),
               let filePath = targetFile.path else {
             print("Did not find \(typeName) anywhere :(")
             return
         }
 
-//        let names = filesSubStructures.flatMap { $0.getInheritedTypes() }
         print("Found \(typeName) in file \(filePath)")
 
         let params = targetStructure.getInitParams(in: targetFile)
         if !params.isEmpty {
             print("Found init method with params: \(params)")
         } else {
-            print("Did not find init method and could not infer it :(")
-            return
+            print("Did not find init method and could not infer it. Initialization with no parameters will be used.")
         }
 
-        let paramsMocks = substituteTypesWithMocks(for: params)
-        print("Found mocks for several params: \(paramsMocks)")
-
-        let className = fileName ?? typeName + "Tests"
-        let fileName = className + ".swift"
-        guard createFile(fileName: fileName) else { return }
-
-        let sourceryExtensions: [String] = paramsMocks.values.compactMap {
-            if $0.isMockOrStub() { return nil }
-            return "extension \($0): AutoMockable {}"
+        guard let testsFilePath = persistenceManager.createTestsFile() else {
+            print("Failure creating file at \(manager.currentDirectoryPath)"); return
         }
-        let contents = ["protocol AutoMockable {}"] + sourceryExtensions
-        writeToFile(fileName: fileName, content: contents.joined(separator: "\n"))
+        print("Created file \(testsFilePath)")
 
-        runSourcery()
+        if !params.isEmpty {
+            persistenceManager.findMocks(for: params, tempFilePath: testsFilePath)
+        }
 
 //        print((try! Structure(file: targetFile)).description)
-    }
-
-    // MARK: - Private
-
-    private func runSourcery() {
-        try? shell("sh ./tools/sourcery.sh")
-    }
-
-    func shell(_ command: String) throws {
-        let task = Process()
-//        let pipe = Pipe()
-
-//        task.standardOutput = pipe
-//        task.standardError = pipe
-        task.arguments = ["-c", command]
-        task.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        task.standardInput = nil
-
-        try task.run()
-
-//        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-//        let output = String(data: data, encoding: .utf8)!
-
-//        return output
-    }
-
-    private func writeToFile(fileName: String, content: String) {
-        let path = FileManager.default.currentDirectoryPath + "/" + fileName
-        if let fileHandle = FileHandle(forWritingAtPath: path),
-           let data = content.data(using: .utf8) {
-            try? fileHandle.write(contentsOf: data)
-            try? fileHandle.close()
-        }
-    }
-
-    private func createFile(fileName: String) -> Bool {
-        let manager = FileManager.default
-        let path = manager.currentDirectoryPath + "/" + fileName
-        let success = manager.createFile(atPath: path, contents: nil)
-        if success {
-            print("Created file \(path)")
-        } else {
-            print("Failure creating file at \(FileManager.default.currentDirectoryPath)")
-        }
-        return success
-    }
-
-    private func substituteTypesWithMocks(for params: [String: String]) -> [String: String] {
-        var params = params
-        let manager = FileManager.default
-        let directoryPath = manager.currentDirectoryPath
-        let enumerator = manager.enumerator(atPath: directoryPath)
-        while let element = enumerator?.nextObject() as? String {
-            if !element.hasPrefix("."),
-               element.hasSuffix(".swift"),
-               let file = File(path: "\(directoryPath)/\(element)"),
-               let fileStructure = SyntaxStructure.from(file) {
-                for subStructure in fileStructure.substructures ?? [] {
-                    guard subStructure.isMockOrStub(),
-                          let name = subStructure.name else { continue }
-                    let inheritedTypes = subStructure.getInheritedTypes()
-                    for (paramName, paramType) in params {
-                        if inheritedTypes.contains(paramType) {
-                            params[paramName] = name
-                            break
-                        }
-                    }
-                }
-            }
-        }
-        return params
-    }
-
-    private func findFile(by typeName: String) -> (targetFile: File,
-                                                   targetStructure: SyntaxStructure,
-                                                   filesSubStructures: [SyntaxStructure])? {
-        let manager = FileManager.default
-        let directoryPath = manager.currentDirectoryPath
-        let enumerator = manager.enumerator(atPath: directoryPath)
-        var targetFile: File?
-        var targetStructure: SyntaxStructure?
-        var filesSubStructures: [SyntaxStructure] = []
-        while let element = enumerator?.nextObject() as? String {
-            if !element.hasPrefix("."),
-               element.hasSuffix(".swift"),
-               let file = File(path: "\(directoryPath)/\(element)"),
-               let fileStructure = SyntaxStructure.from(file) {
-                filesSubStructures += fileStructure.getClassesOrStructsOrExtensions(with: typeName)
-                if let structure = fileStructure.getClassOrStruct(with: typeName) {
-                    targetFile = file
-                    targetStructure = structure
-                }
-            }
-        }
-        if let targetFile = targetFile, let targetStructure = targetStructure {
-            return (targetFile, targetStructure, filesSubStructures)
-        }
-        return nil
     }
 }
