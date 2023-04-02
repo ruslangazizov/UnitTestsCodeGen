@@ -1,5 +1,5 @@
 //
-//  PersistenceManager.swift
+//  CoreManager.swift
 //  UnitTestsCodeGen
 //
 //  Created by Руслан on 27.03.2023.
@@ -8,11 +8,12 @@
 import Foundation
 import SourceKittenFramework
 
-final class PersistenceManager {
+final class CoreManager {
 
     // Dependencies
     private let fileManager = FileManager.default
     private let commandLineManager: CommandLineManager
+    private let testFileManager: TestFileManager
 
     // Properties
     private let cliArgs: CommandLineArguments
@@ -20,14 +21,59 @@ final class PersistenceManager {
     // MARK: - Init
 
     init(commandLineManager: CommandLineManager,
+         testFileManager: TestFileManager,
          commandLineArguments: CommandLineArguments) {
         self.commandLineManager = commandLineManager
+        self.testFileManager = testFileManager
         self.cliArgs = commandLineArguments
     }
 
     // MARK: - Internal
 
-    func findFile(by typeName: String) -> (targetFile: File,
+    func run() {
+        print("""
+        You entered: type name = \(cliArgs.typeName),
+                     file name = \(String(describing: cliArgs.fileName))
+                     folder name for generated mocks = \(cliArgs.mocksFolderName)
+        """)
+        // filesSubStructures нужны, чтобы по ним пройтись и собрать все >=internal методы/свойства
+        guard let (targetFile,
+                   targetStructure,
+                   filesSubStructures) = findFile(by: cliArgs.typeName),
+              let filePath = targetFile.path else {
+            print("Did not find \(cliArgs.typeName) anywhere :(")
+            return
+        }
+
+        print("Found \(cliArgs.typeName) in file \(filePath)")
+
+        var params = targetStructure.getInitParams(in: targetFile)
+        if !params.isEmpty {
+            print("Found init method with params: \(params)")
+        } else {
+            print("Did not find init method and could not infer it. Initialization with no parameters will be used.")
+        }
+
+        guard let testsFilePath = testFileManager.createFile(fileName: cliArgs.fileName,
+                                                             typeName: cliArgs.typeName) else {
+            print("Failure creating file at \(fileManager.currentDirectoryPath)"); return
+        }
+        print("Created file \(testsFilePath)")
+
+        if !params.isEmpty {
+            params = addMocks(for: params, tempFilePath: testsFilePath)
+        }
+
+        testFileManager.generateFileContents(typeName: cliArgs.typeName,
+                                             params: params,
+                                             filesSubStructures: filesSubStructures)
+
+//        print((try! Structure(file: targetFile)).description)
+    }
+
+    // MARK: - Private
+
+    private func findFile(by typeName: String) -> (targetFile: File,
                                            targetStructure: SyntaxStructure,
                                            filesSubStructures: [SyntaxStructure])? {
         let directoryPath = fileManager.currentDirectoryPath
@@ -53,36 +99,32 @@ final class PersistenceManager {
         return nil
     }
 
-    func createTestsFile() -> String? {
-        let className = cliArgs.fileName ?? (cliArgs.typeName + "Tests")
-        let fileName = className + ".swift"
-        let testsFilePath = fileManager.currentDirectoryPath + "/" + fileName
-        if fileManager.createFile(atPath: testsFilePath, contents: nil) {
-            return testsFilePath
-        } else {
-            return nil
-        }
-    }
-
-    func findMocks(for params: [String: String], tempFilePath: String) {
-        let params = substituteTypesWithMocks(for: params)
-        var paramsMocks = params.filter { $1.isMockOrStub() }
-        if !paramsMocks.isEmpty {
-            print("Found mocks for several params: \(paramsMocks)")
+    private func addMocks(for params: [String: String], tempFilePath: String) -> [String: String] {
+        var params = substituteTypesWithMocks(for: params)
+        var mocksParams = params.filter { $1.isMockOrStub() }
+        let nonMocksParams = params.filter { !$1.isMockOrStub() }
+        if !mocksParams.isEmpty {
+            print("Found mocks for several params: \(mocksParams)")
         }
 
-        generateSourceryExtensions(in: tempFilePath, for: params)
+        generateSourceryExtensions(in: tempFilePath, for: nonMocksParams)
 
+        print("Running Sourcery...")
         if let result = commandLineManager.runSourcery(imports: cliArgs.imports,
                                                        testableImports: cliArgs.testableImports) {
             print(result)
         }
+        print("Done running Sourcery!")
 
         let mocksFolderPath = fileManager.currentDirectoryPath + "/" + cliArgs.mocksFolderName
-        paramsMocks = substituteTypesWithMocks(for: params, in: mocksFolderPath)
-    }
+        params = substituteTypesWithMocks(for: params, in: mocksFolderPath)
+        mocksParams = params.filter { $1.isMockOrStub() }
+        if !mocksParams.isEmpty {
+            print("Found mocks for several params: \(mocksParams)")
+        }
 
-    // MARK: - Private
+        return params
+    }
 
     private func generateSourceryExtensions(in filePath: String, for params: [String: String]) {
         let sourceryExtensions: [String] = params.values.compactMap {
@@ -92,20 +134,13 @@ final class PersistenceManager {
             return "extension \(name): AutoMockable {}"
         }
         let contents = ["protocol AutoMockable {}"] + sourceryExtensions
-        writeToFile(path: filePath, content: contents.joined(separator: "\n"))
-    }
-
-    private func writeToFile(path: String, content: String) {
-        if let fileHandle = FileHandle(forWritingAtPath: path),
-           let data = content.data(using: .utf8) {
-            try? fileHandle.write(contentsOf: data)
-            try? fileHandle.close()
-        }
+        testFileManager.writeToFile(path: filePath, content: contents.joined(separator: "\n"))
     }
 
     private func substituteTypesWithMocks(for params: [String: String],
                                           in directoryPath: String? = nil) -> [String: String] {
-        var params = params.filter { !$1.isMockOrStub() }
+        let mocksParams = params.filter { $1.isMockOrStub() }
+        var nonMocksParams = params.filter { !$1.isMockOrStub() }
         let directoryPath = directoryPath ?? fileManager.currentDirectoryPath
         let enumerator = fileManager.enumerator(atPath: directoryPath)
         while let element = enumerator?.nextObject() as? String {
@@ -117,16 +152,16 @@ final class PersistenceManager {
                     guard subStructure.isMockOrStub(),
                           let name = subStructure.name else { continue }
                     let inheritedTypes = subStructure.getInheritedTypes()
-                    for (paramName, paramType) in params {
+                    for (paramName, paramType) in nonMocksParams {
                         let paramType = paramType.trimmingQuestionMarksCharacters()
                         if inheritedTypes.contains(paramType) {
-                            params[paramName] = name
+                            nonMocksParams[paramName] = name
                             break
                         }
                     }
                 }
             }
         }
-        return params
+        return mocksParams.merging(nonMocksParams) { first, _ in first }
     }
 }

@@ -38,10 +38,10 @@ struct UnitTestsCodeGen: ParsableCommand {
                              imports: imports?.components(separatedBy: ",") ?? [],
                              testableImports: testableImports?.components(separatedBy: ",") ?? [])
     }()
-    private lazy var manager = FileManager.default
-    private lazy var persistenceManager = {
-        PersistenceManager(commandLineManager: CommandLineManager(),
-                           commandLineArguments: arguments)
+    private lazy var coreManager = {
+        CoreManager(commandLineManager: CommandLineManager(),
+                    testFileManager: TestFileManager(),
+                    commandLineArguments: arguments)
     }()
 
     // MARK: - Arguments and options
@@ -57,38 +57,6 @@ struct UnitTestsCodeGen: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: .configurationAbstract, version: "0.1.0")
 
     mutating func run() throws {
-        print("""
-        You entered: type name = \(typeName),
-                     file name = \(String(describing: fileName))
-                     folder name for generated mocks = \(mocksFolderName)
-        """)
-        // filesSubStructures нужны, чтобы по ним пройтись и собрать все >=internal методы/свойства
-        guard let (targetFile,
-                   targetStructure,
-                   filesSubStructures) = persistenceManager.findFile(by: typeName),
-              let filePath = targetFile.path else {
-            print("Did not find \(typeName) anywhere :(")
-            return
-        }
-
-        print("Found \(typeName) in file \(filePath)")
-
-        let params = targetStructure.getInitParams(in: targetFile)
-        if !params.isEmpty {
-            print("Found init method with params: \(params)")
-        } else {
-            print("Did not find init method and could not infer it. Initialization with no parameters will be used.")
-        }
-
-        guard let testsFilePath = persistenceManager.createTestsFile() else {
-            print("Failure creating file at \(manager.currentDirectoryPath)"); return
-        }
-        print("Created file \(testsFilePath)")
-
-        if !params.isEmpty {
-            persistenceManager.findMocks(for: params, tempFilePath: testsFilePath)
-        }
-
-//        print((try! Structure(file: targetFile)).description)
+        coreManager.run()
     }
 }
