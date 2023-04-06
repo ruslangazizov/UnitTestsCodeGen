@@ -10,7 +10,7 @@ import Foundation
 protocol IPresenter: AnyObject {
     var dataSource: [String] { get }
     func viewDidLoad()
-    func viewDidAppear()
+    func viewDidAppear() -> Bool
 }
 
 final class Presenter: IPresenter {
@@ -35,5 +35,12 @@ final class Presenter: IPresenter {
         _ = ViewController(presenter: self)
     }
 
-    func viewDidAppear() {}
+    func viewDidAppear() -> Bool { true }
+}
+
+extension Presenter {
+
+    func someMethodInExtension() {
+
+    }
 }

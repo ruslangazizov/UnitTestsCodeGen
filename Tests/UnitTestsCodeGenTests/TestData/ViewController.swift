@@ -38,3 +38,10 @@ extension ViewController {
         ""
     }
 }
+
+extension Presenter {
+
+    func someMethodInExtensionInAnotherFile(_ someArg: String) -> Int {
+        return 0
+    }
+}

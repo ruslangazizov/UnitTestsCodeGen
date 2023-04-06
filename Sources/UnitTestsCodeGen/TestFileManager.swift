@@ -39,9 +39,11 @@ final class TestFileManager {
         }
     }
 
-    func generateFileContents(typeName: String,
-                              params: [String: String],
-                              filesSubStructures: [SyntaxStructure]) {
+    func generateFileContents(imports: [String],
+                              testableImports: [String],
+                              typeName: String,
+                              params: [UnitTestMethodArgument],
+                              unitTestDataArray: [UnitTestData]) {
         guard let className = className,
               let testsFilePath = testsFilePath else { return }
         var contents: [String] = []
@@ -55,45 +57,113 @@ final class TestFileManager {
         import AppKit
         #endif
         import XCTest
-
         """)
-        // TODO: добавить вставку обычных и тестовых импортов, переданных через аргументы
+        for import_ in imports {
+            contents.append("import \(import_)")
+        }
+        for testableImport in testableImports {
+            contents.append("@testable import \(testableImport)")
+        }
+        contents.append("")
         contents.append("final class \(className): XCTestCase {")
 
-        var intendedContents: [String] = [""]
-        intendedContents.append("// System under test")
-        intendedContents.append("private var sut: \(typeName)!")
+        var indentedContents: [String] = [""]
+        indentedContents.append("// System under test")
+        indentedContents.append("private var sut: \(typeName)!")
 
         if !params.isEmpty {
-            intendedContents.append("// Dependencies")
+            indentedContents.append("// Dependencies")
         }
-        for (paramName, paramType) in params {
-            intendedContents.append("private var \(paramName): \(paramType)!")
+        for param in params {
+            indentedContents.append("private var \(param.name): \(param.typeName)!")
         }
-        intendedContents.append("")
+        indentedContents.append("")
 
-        intendedContents.append("override func setUp() {")
-        intendedContents.append("    super.setUp()")
+        indentedContents.append("override func setUp() {")
+        indentedContents.append("    super.setUp()")
         var initParams: [String] = []
-        for (paramName, paramType) in params {
-            intendedContents.append("    \(paramName) = \(paramType)()")
-            initParams.append("\(paramName): \(paramName)")
+        for param in params {
+            indentedContents.append("    \(param.name) = \(param.typeName)()")
+            if let usingName = param.usingName {
+                initParams.append("\(usingName): \(param.name)")
+            } else {
+                initParams.append(param.name)
+            }
         }
         let initParamsString = initParams.joined(separator: ", ")
-        intendedContents.append("    sut = \(typeName)(\(initParamsString))")
-        intendedContents.append("}")
-        intendedContents.append("")
+        indentedContents.append("    sut = \(typeName)(\(initParamsString))")
+        indentedContents.append("}")
+        indentedContents.append("")
 
-        intendedContents.append("override func tearDown() {")
-        intendedContents.append("    super.tearDown()")
-        intendedContents.append("    sut = nil")
-        for (paramName, _) in params {
-            intendedContents.append("    \(paramName) = nil")
+        indentedContents.append("override func tearDown() {")
+        indentedContents.append("    super.tearDown()")
+        indentedContents.append("    sut = nil")
+        for param in params {
+            indentedContents.append("    \(param.name) = nil")
         }
-        intendedContents.append("}")
+        indentedContents.append("}")
+        indentedContents.append("")
 
-        contents += intendedContents.map { "    " + $0 }
+        indentedContents.append("// MARK: - Tests")
+
+        for data in unitTestDataArray {
+            indentedContents.append("")
+            indentedContents.append("func test_\(data.name)() throws {")
+
+            var methodContents: [String] = ["// given"]
+            if let arguments = data.arguments {
+                for argument in arguments {
+                    let placeholder = createPlaceholder(with: argument.typeName)
+                    methodContents.append("let \(argument.name): \(argument.typeName) = \(placeholder)")
+                }
+            }
+            if let typeName = data.returningType {
+                let placeholder = createPlaceholder(with: typeName)
+                methodContents.append("let expectedResult: \(typeName) = \(placeholder)")
+            } else {
+                methodContents.append("")
+            }
+            methodContents.append("")
+            methodContents.append("// when")
+            var whenString = "sut.\(data.name)"
+            if let arguments = data.arguments {
+                whenString.append("(")
+                let argsString = arguments.map {
+                    if let usingName = $0.usingName {
+                        return "\(usingName): \($0.name)"
+                    } else {
+                        return $0.name
+                    }
+                }
+                whenString.append(argsString.joined(separator: ", "))
+                whenString.append(")")
+            }
+            if data.returningType != nil {
+                whenString = "let result = " + whenString
+            }
+            methodContents.append(whenString)
+            methodContents.append("")
+            methodContents.append("// then")
+            if data.returningType != nil {
+                methodContents.append("XCTAssertEqual(result, expectedResult)")
+            } else {
+                methodContents.append("")
+            }
+
+            indentedContents += methodContents.map { "    " + $0 }
+            indentedContents.append("}")
+        }
+
+        contents += indentedContents.map { "    " + $0 }
         contents.append("}")
         writeToFile(path: testsFilePath, content: contents.joined(separator: "\n"))
+    }
+
+    // MARK: - Private
+
+    private func createPlaceholder(with content: String) -> String {
+        let begining = "<#"
+        let ending = "#>"
+        return begining + content + ending
     }
 }

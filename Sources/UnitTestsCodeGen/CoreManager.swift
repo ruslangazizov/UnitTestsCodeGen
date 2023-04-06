@@ -33,10 +33,11 @@ final class CoreManager {
     func run() {
         print("""
         You entered: type name = \(cliArgs.typeName),
-                     file name = \(String(describing: cliArgs.fileName))
-                     folder name for generated mocks = \(cliArgs.mocksFolderName)
+                     file name = \(String(describing: cliArgs.fileName)),
+                     folder name for generated mocks = \(cliArgs.mocksFolderName),
+                     imports = \(cliArgs.imports),
+                     testable imports = \(cliArgs.testableImports)
         """)
-        // filesSubStructures нужны, чтобы по ним пройтись и собрать все >=internal методы/свойства
         guard let (targetFile,
                    targetStructure,
                    filesSubStructures) = findFile(by: cliArgs.typeName),
@@ -56,7 +57,8 @@ final class CoreManager {
 
         guard let testsFilePath = testFileManager.createFile(fileName: cliArgs.fileName,
                                                              typeName: cliArgs.typeName) else {
-            print("Failure creating file at \(fileManager.currentDirectoryPath)"); return
+            print("Failure creating file at \(fileManager.currentDirectoryPath)")
+            return
         }
         print("Created file \(testsFilePath)")
 
@@ -64,18 +66,39 @@ final class CoreManager {
             params = addMocks(for: params, tempFilePath: testsFilePath)
         }
 
-        testFileManager.generateFileContents(typeName: cliArgs.typeName,
+        let unitTestDataArray = extractNonPrivateMethodsAndProperties(from: filesSubStructures)
+        print("Generating test file...")
+        testFileManager.generateFileContents(imports: cliArgs.imports,
+                                             testableImports: cliArgs.testableImports,
+                                             typeName: cliArgs.typeName,
                                              params: params,
-                                             filesSubStructures: filesSubStructures)
+                                             unitTestDataArray: unitTestDataArray)
+        print("Done generating test file!")
 
 //        print((try! Structure(file: targetFile)).description)
     }
 
     // MARK: - Private
 
+    private func extractNonPrivateMethodsAndProperties(from filesSubStructures: [SyntaxStructure]) -> [UnitTestData] {
+        var data: [UnitTestData] = []
+        for fileSubStructure in filesSubStructures {
+            for subStructure in fileSubStructure.substructures ?? [] {
+                guard subStructure.isNonPrivateInstanceMethodOrProperty(),
+                      !subStructure.isInitMethod(),
+                      let name = subStructure.getActualName() else { continue }
+                let arguments = subStructure.isInstanceMethod() ? subStructure.parseMethodParams() : nil
+                data.append(UnitTestData(name: name,
+                                         arguments: arguments,
+                                         returningType: subStructure.typename))
+            }
+        }
+        return data
+    }
+
     private func findFile(by typeName: String) -> (targetFile: File,
-                                           targetStructure: SyntaxStructure,
-                                           filesSubStructures: [SyntaxStructure])? {
+                                                   targetStructure: SyntaxStructure,
+                                                   filesSubStructures: [SyntaxStructure])? {
         let directoryPath = fileManager.currentDirectoryPath
         let enumerator = fileManager.enumerator(atPath: directoryPath)
         var targetFile: File?
@@ -99,10 +122,11 @@ final class CoreManager {
         return nil
     }
 
-    private func addMocks(for params: [String: String], tempFilePath: String) -> [String: String] {
+    private func addMocks(for params: [UnitTestMethodArgument],
+                          tempFilePath: String) -> [UnitTestMethodArgument] {
         var params = substituteTypesWithMocks(for: params)
-        var mocksParams = params.filter { $1.isMockOrStub() }
-        let nonMocksParams = params.filter { !$1.isMockOrStub() }
+        var mocksParams = params.filter { $0.typeName.isMockOrStub() }
+        let nonMocksParams = params.filter { !$0.typeName.isMockOrStub() }
         if !mocksParams.isEmpty {
             print("Found mocks for several params: \(mocksParams)")
         }
@@ -118,7 +142,7 @@ final class CoreManager {
 
         let mocksFolderPath = fileManager.currentDirectoryPath + "/" + cliArgs.mocksFolderName
         params = substituteTypesWithMocks(for: params, in: mocksFolderPath)
-        mocksParams = params.filter { $1.isMockOrStub() }
+        mocksParams = params.filter { $0.typeName.isMockOrStub() }
         if !mocksParams.isEmpty {
             print("Found mocks for several params: \(mocksParams)")
         }
@@ -126,10 +150,11 @@ final class CoreManager {
         return params
     }
 
-    private func generateSourceryExtensions(in filePath: String, for params: [String: String]) {
-        let sourceryExtensions: [String] = params.values.compactMap {
-            if $0.isMockOrStub() { return nil }
-            var name = $0
+    private func generateSourceryExtensions(in filePath: String,
+                                            for params: [UnitTestMethodArgument]) {
+        let sourceryExtensions: [String] = params.compactMap { param in
+            if param.typeName.isMockOrStub() { return nil }
+            var name = param.typeName
             if name.hasSuffix("?") { name = name.trimmingQuestionMarksCharacters() }
             return "extension \(name): AutoMockable {}"
         }
@@ -137,10 +162,10 @@ final class CoreManager {
         testFileManager.writeToFile(path: filePath, content: contents.joined(separator: "\n"))
     }
 
-    private func substituteTypesWithMocks(for params: [String: String],
-                                          in directoryPath: String? = nil) -> [String: String] {
-        let mocksParams = params.filter { $1.isMockOrStub() }
-        var nonMocksParams = params.filter { !$1.isMockOrStub() }
+    private func substituteTypesWithMocks(for params: [UnitTestMethodArgument],
+                                          in directoryPath: String? = nil) -> [UnitTestMethodArgument] {
+        let mocksParams = params.filter { $0.typeName.isMockOrStub() }
+        var nonMocksParams = params.filter { !$0.typeName.isMockOrStub() }
         let directoryPath = directoryPath ?? fileManager.currentDirectoryPath
         let enumerator = fileManager.enumerator(atPath: directoryPath)
         while let element = enumerator?.nextObject() as? String {
@@ -152,16 +177,18 @@ final class CoreManager {
                     guard subStructure.isMockOrStub(),
                           let name = subStructure.name else { continue }
                     let inheritedTypes = subStructure.getInheritedTypes()
-                    for (paramName, paramType) in nonMocksParams {
-                        let paramType = paramType.trimmingQuestionMarksCharacters()
+                    for (index, param) in nonMocksParams.enumerated() {
+                        let paramType = param.typeName.trimmingQuestionMarksCharacters()
                         if inheritedTypes.contains(paramType) {
-                            nonMocksParams[paramName] = name
+                            nonMocksParams[index] = UnitTestMethodArgument(name: param.name,
+                                                                           usingName: param.usingName,
+                                                                           typeName: name)
                             break
                         }
                     }
                 }
             }
         }
-        return mocksParams.merging(nonMocksParams) { first, _ in first }
+        return mocksParams + nonMocksParams
     }
 }

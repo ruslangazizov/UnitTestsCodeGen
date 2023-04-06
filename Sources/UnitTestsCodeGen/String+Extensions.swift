@@ -12,4 +12,9 @@ extension String {
     func trimmingQuestionMarksCharacters() -> String {
         trimmingCharacters(in: .init(charactersIn: "?"))
     }
+
+    func isMockOrStub() -> Bool {
+        let name = lowercased()
+        return name.hasSuffix("mock") || name.hasSuffix("stub")
+    }
 }
