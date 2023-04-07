@@ -197,16 +197,12 @@ import UIKit
 import AppKit
 #endif
 
-argument = {{ argument }}
-
-{#
 {% for import in argument.imports %}
 import {{ import }}
 {% endfor %}
 {% for import in argument.testable_imports %}
 @testable import {{ import }}
 {% endfor %}
-#}
 
 {% call accessLevel type.accessLevel %}final class {{ type.name }}Mock: {{ type.name }} {
 

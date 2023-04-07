@@ -7,4 +7,4 @@
 
 import Foundation
 
-UnitTestsCodeGen.main(["Presenter", "-i", "A,B", "-t", "B,C,D"])
+UnitTestsCodeGen.main()

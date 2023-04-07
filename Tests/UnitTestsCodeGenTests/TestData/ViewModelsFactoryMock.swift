@@ -7,15 +7,15 @@
 
 import Foundation
 
-//final class ViewModelsFactoryMock: IViewModelsFactory {
-//
-//    var invokedBuildViewModel: Bool = false
-//    var invokedBuildViewModelCount: Int = 0
-//    var stubbedBuildViewModelResult: [String] = []
-//
-//    func buildViewModel() -> [String] {
-//        invokedBuildViewModel = true
-//        invokedBuildViewModelCount += 1
-//        return stubbedBuildViewModelResult
-//    }
-//}
+final class ViewModelsFactoryMock: IViewModelsFactory {
+
+    var invokedBuildViewModel: Bool = false
+    var invokedBuildViewModelCount: Int = 0
+    var stubbedBuildViewModelResult: [String] = []
+
+    func buildViewModel() -> [String] {
+        invokedBuildViewModel = true
+        invokedBuildViewModelCount += 1
+        return stubbedBuildViewModelResult
+    }
+}
