@@ -16,8 +16,8 @@ private extension String {
     static let fileNameAbstract = "Name of a file to be generated (without .swift extension)"
     static let configurationAbstract = "Generates unit test case class"
     static let mocksFolderNameAbstract = "Name of folder for generated mocks"
-    static let importsAbstract = "Additional imports for generated mocks files separated with comma without spaces"
-    static let testableImportsAbstract = "Imports with @testable annotation for generated mocks files separated with comma without spaces"
+    static let importsAbstract = "Additional imports for generated test file and mocks files separated with comma without spaces"
+    static let testableImportsAbstract = "Imports with @testable annotation for test file and generated mocks files separated with comma without spaces"
 }
 
 struct CommandLineArguments {

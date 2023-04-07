@@ -12,14 +12,12 @@ final class CommandLineManager {
     // MARK: - Internal
 
     func runSourcery(imports: [String], testableImports: [String]) -> String? {
-        let importsString = imports.map { "--args imports=\($0)" }.joined(separator: " ")
-        let testableImportsString = testableImports.map { "--args testable_imports=\($0)" }.joined(separator: " ")
+        let additionalArgs = createAdditionalArgs(imports: imports, testableImports: testableImports)
         let args = ["--sources .",
                     "--exclude-sources .build",
                     "--templates ./tools/templates/AutoMockable.stencil",
                     "--output Generated",
-                    importsString,
-                    testableImportsString] // --verbose
+                    additionalArgs] // --verbose
         return try? shell("./tools/bin/sourcery " + args.joined(separator: " "))
     }
 
@@ -37,5 +35,11 @@ final class CommandLineManager {
         try task.run()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8)
+    }
+
+    private func createAdditionalArgs(imports: [String], testableImports: [String]) -> String {
+        let importsArgs = imports.map { "--args imports=\($0)" }
+        let testableImportsArgs = testableImports.map { "--args testable_imports=\($0)" }
+        return (importsArgs + testableImportsArgs).joined(separator: " ")
     }
 }

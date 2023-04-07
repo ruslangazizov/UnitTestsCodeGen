@@ -125,17 +125,7 @@ private extension SyntaxStructure {
     }
 
     func parseInitMethod() -> [UnitTestMethodArgument] {
-//        var params: [UnitTestMethodArgument] = [:]
-        return substructures?.first(where: { $0.isInitMethod() })?.parseMethodParams() ?? []
-
-
-//        for subStructure in substructures ?? [] {
-//            guard subStructure.isInitMethod() else { continue }
-//            for (paramName, paramType) in subStructure.parseMethodParams() {
-//                params[paramName] = paramType
-//            }
-//        }
-//        return params
+        substructures?.first(where: { $0.isInitMethod() })?.parseMethodParams() ?? []
     }
 
     func parseStructSynthesizedInit(in file: File) -> [UnitTestMethodArgument] {
