@@ -11,20 +11,20 @@ protocol IViewController {
     func reloadData()
 }
 
-struct ViewController: CustomStringConvertible {
+struct ViewController {
 
     let presenter: IPresenter?
-//    internal let secondLet      =     ""
-//    private let thirdLet: String = ""
-//
-//    internal var firstVar = [String]()
-//    var secondVar: Int
-//
-//    private var firstComputedVar: String {""}
-//
-//    lazy var firstSpecialVar: String = {
-//        return ""
-//    }()
+    internal let secondLet      =     ""
+    private let thirdLet: String = ""
+
+    internal var firstVar = [String]()
+    var secondVar: Int
+
+    private var firstComputedVar: String {""}
+
+    lazy var firstSpecialVar: String = {
+        return ""
+    }()
 }
 
 extension ViewController: IViewController {
@@ -36,5 +36,12 @@ extension ViewController {
 
     var description: String {
         ""
+    }
+}
+
+extension Presenter {
+
+    func someMethodInExtensionInAnotherFile(_ someArg: String) -> Int {
+        return 0
     }
 }
