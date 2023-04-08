@@ -9,12 +9,6 @@ import Foundation
 
 struct UnitTestData {
     let name: String
-    let arguments: [UnitTestMethodArgument]?
+    let arguments: [SwiftMethodArgument]?
     let returningType: String?
-}
-
-struct UnitTestMethodArgument {
-    let name: String // имя аргумента
-    let usingName: String? // лейбл аргумента или nil в случае _
-    let typeName: String // тип аргумента
 }

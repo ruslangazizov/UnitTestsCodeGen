@@ -47,7 +47,7 @@ extension SyntaxStructure {
         inheritedTypes?.compactMap { $0.name } ?? []
     }
 
-    func getInitParams(in file: File) -> [UnitTestMethodArgument] {
+    func getInitParams(in file: File) -> [SwiftMethodArgument] {
         let params = parseInitMethod()
         if params.isEmpty && kind == "source.lang.swift.decl.struct" {
             return parseStructSynthesizedInit(in: file)
@@ -91,7 +91,7 @@ extension SyntaxStructure {
         return String(name.prefix(while: { $0 != "(" }))
     }
 
-    func parseMethodParams() -> [UnitTestMethodArgument] {
+    func parseMethodParams() -> [SwiftMethodArgument] {
         guard let name = name,
               let substructures = substructures,
               let methodParamsStringOpeningBracketIndex = name.firstIndex(of: "("),
@@ -103,12 +103,12 @@ extension SyntaxStructure {
         let methodParamsLabelsString = name[methodParamsStringStartIndex...methodParamsStringLastIndex]
         let methodParamsLabels = methodParamsLabelsString.split(separator: ":").map { String($0) }
 
-        var params: [UnitTestMethodArgument] = []
+        var params: [SwiftMethodArgument] = []
         for (paramStructure, paramLabel) in zip(substructures, methodParamsLabels) {
             guard let name = paramStructure.name,
                   let typename = paramStructure.typename else { continue }
             let usingName = paramLabel == "_" ? nil : paramLabel
-            params.append(UnitTestMethodArgument(name: name, usingName: usingName, typeName: typename))
+            params.append(SwiftMethodArgument(name: name, usingName: usingName, typeName: typename))
         }
         return params
     }
@@ -124,13 +124,13 @@ private extension SyntaxStructure {
         isClassOrStruct() || kind == "source.lang.swift.decl.extension"
     }
 
-    func parseInitMethod() -> [UnitTestMethodArgument] {
+    func parseInitMethod() -> [SwiftMethodArgument] {
         substructures?.first(where: { $0.isInitMethod() })?.parseMethodParams() ?? []
     }
 
-    func parseStructSynthesizedInit(in file: File) -> [UnitTestMethodArgument] {
+    func parseStructSynthesizedInit(in file: File) -> [SwiftMethodArgument] {
         let fileContents = file.contents.utf8
-        var params: [UnitTestMethodArgument] = []
+        var params: [SwiftMethodArgument] = []
         for subStructure in substructures ?? [] {
             guard subStructure.kind == "source.lang.swift.decl.var.instance",
                   subStructure.bodylength == nil,
@@ -144,7 +144,7 @@ private extension SyntaxStructure {
                !(propertyLine.hasPrefix("var") && propertyLine.hasSuffix("?")),
                let name = subStructure.name,
                let typename = subStructure.typename {
-                params.append(UnitTestMethodArgument(name: name, usingName: name, typeName: typename))
+                params.append(SwiftMethodArgument(name: name, usingName: name, typeName: typename))
             }
         }
         return params

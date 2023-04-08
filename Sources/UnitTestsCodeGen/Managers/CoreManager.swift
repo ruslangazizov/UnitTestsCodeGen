@@ -31,12 +31,17 @@ final class CoreManager {
     // MARK: - Internal
 
     func run() {
+        guard commandLineManager.checkSourceryPresence() else {
+            print("Unable to locate sourcery. Please install it - https://github.com/krzysztofzablocki/Sourcery.")
+            return
+        }
+        commandLineManager.placeMockTemplateFile()
         print("""
         You entered: type name = \(cliArgs.typeName),
-                     file name = \(String(describing: cliArgs.fileName)),
+                     file name = \(cliArgs.fileName ?? "nil"),
                      folder name for generated mocks = \(cliArgs.mocksFolderName),
-                     imports = \(cliArgs.imports),
-                     testable imports = \(cliArgs.testableImports)
+                     additional imports = \(cliArgs.imports),
+                     additional testable imports = \(cliArgs.testableImports).
         """)
         guard let (targetFile,
                    targetStructure,
@@ -50,7 +55,7 @@ final class CoreManager {
 
         var params = targetStructure.getInitParams(in: targetFile)
         if !params.isEmpty {
-            print("Found init method with params: \(params)")
+            print("Found init method with params: \(params.description)")
         } else {
             print("Did not find init method and could not infer it. Initialization with no parameters will be used.")
         }
@@ -74,8 +79,6 @@ final class CoreManager {
                                              params: params,
                                              unitTestDataArray: unitTestDataArray)
         print("Done generating test file!")
-
-//        print((try! Structure(file: targetFile)).description)
     }
 
     // MARK: - Private
@@ -122,21 +125,24 @@ final class CoreManager {
         return nil
     }
 
-    private func addMocks(for params: [UnitTestMethodArgument],
-                          tempFilePath: String) -> [UnitTestMethodArgument] {
+    private func addMocks(for params: [SwiftMethodArgument],
+                          tempFilePath: String) -> [SwiftMethodArgument] {
         var params = substituteTypesWithMocks(for: params)
         var mocksParams = params.filter { $0.typeName.isMockOrStub() }
         let nonMocksParams = params.filter { !$0.typeName.isMockOrStub() }
         if !mocksParams.isEmpty {
-            print("Found mocks for several params: \(mocksParams)")
+            print("Found mocks for several params: \(mocksParams.description)")
         }
 
         generateSourceryExtensions(in: tempFilePath, for: nonMocksParams)
 
         print("Running Sourcery...")
         if let result = commandLineManager.runSourcery(imports: cliArgs.imports,
-                                                       testableImports: cliArgs.testableImports) {
-            print(result)
+                                                       testableImports: cliArgs.testableImports,
+                                                       mocksFolderName: cliArgs.mocksFolderName) {
+            if !result.isEmpty {
+                print(result)
+            }
         }
         print("Done running Sourcery!")
 
@@ -144,14 +150,14 @@ final class CoreManager {
         params = substituteTypesWithMocks(for: params, in: mocksFolderPath)
         mocksParams = params.filter { $0.typeName.isMockOrStub() }
         if !mocksParams.isEmpty {
-            print("Found mocks for several params: \(mocksParams)")
+            print("Found mocks for several params: \(mocksParams.description)")
         }
 
         return params
     }
 
     private func generateSourceryExtensions(in filePath: String,
-                                            for params: [UnitTestMethodArgument]) {
+                                            for params: [SwiftMethodArgument]) {
         let sourceryExtensions: [String] = params.compactMap { param in
             if param.typeName.isMockOrStub() { return nil }
             var name = param.typeName
@@ -162,8 +168,8 @@ final class CoreManager {
         testFileManager.writeToFile(path: filePath, content: contents.joined(separator: "\n"))
     }
 
-    private func substituteTypesWithMocks(for params: [UnitTestMethodArgument],
-                                          in directoryPath: String? = nil) -> [UnitTestMethodArgument] {
+    private func substituteTypesWithMocks(for params: [SwiftMethodArgument],
+                                          in directoryPath: String? = nil) -> [SwiftMethodArgument] {
         let mocksParams = params.filter { $0.typeName.isMockOrStub() }
         var nonMocksParams = params.filter { !$0.typeName.isMockOrStub() }
         let directoryPath = directoryPath ?? fileManager.currentDirectoryPath
@@ -180,7 +186,7 @@ final class CoreManager {
                     for (index, param) in nonMocksParams.enumerated() {
                         let paramType = param.typeName.trimmingQuestionMarksCharacters()
                         if inheritedTypes.contains(paramType) {
-                            nonMocksParams[index] = UnitTestMethodArgument(name: param.name,
+                            nonMocksParams[index] = SwiftMethodArgument(name: param.name,
                                                                            usingName: param.usingName,
                                                                            typeName: name)
                             break
